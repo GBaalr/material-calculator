@@ -77,16 +77,23 @@ const INITIAL_CONSTRUCTIONS: Construction[] = [
   }
 ];
 
-// Aesthetic profile colors for segments
+// Refined architectural pastel colors for profile segments (Monolith Studio palette)
 const PROFILE_COLORS: Record<string, string> = {
-  '50 x 50 x 3.2': '#6366f1', // Indigo
-  '50 x 30 x 2.6': '#10b981', // Emerald
-  '20 x 20 x 2.0': '#8b5cf6', // Violet
-  'default1': '#3b82f6',
-  'default2': '#ec4899',
-  'default3': '#f59e0b',
-  'default4': '#14b8a6',
-  'default5': '#f43f5e'
+  '60 x 60 x 3.2': '#60A5FA', // Sky Blue
+  '20 x 10 x 2.6': '#34D399', // Mint Emerald
+  '40 x 20 x 2.6': '#A78BFA', // Lavender
+  '20 x 20 x 2.0': '#FBBF24', // Warm Amber
+  '100 x 50 x 3.2': '#F472B6', // Soft Rose
+  '60 x 40 x 3.2': '#38BDF8', // Soft Cyan
+  '50 x 50 x 3.2': '#60A5FA',
+  '50 x 30 x 2.6': '#34D399',
+  'default1': '#60A5FA',
+  'default2': '#34D399',
+  'default3': '#A78BFA',
+  'default4': '#FBBF24',
+  'default5': '#F472B6',
+  'default6': '#38BDF8',
+  'default7': '#818CF8'
 };
 
 export default function App() {
@@ -103,15 +110,23 @@ export default function App() {
             position: c.position || String(cIndex + 1),
             qty: Math.max(1, parseInt(c.qty, 10) || 1),
             items: Array.isArray(c.items)
-              ? c.items.map((item: any, iIndex: number) => ({
-                  id: item.id || `i-saved-${Date.now()}-${cIndex}-${iIndex}`,
-                  position: item.position || `${c.position || cIndex + 1}.${iIndex + 1}`,
-                  profile: item.profile || '50 x 50 x 3.2',
-                  length: Math.max(0, parseFloat(item.length) || 0),
-                  width: item.width !== undefined ? Math.max(0, parseFloat(item.width) || 0) : undefined,
-                  qty: Math.max(1, parseInt(item.qty, 10) || 1),
-                  isSheetMetal: !!item.isSheetMetal
-                }))
+              ? c.items.map((item: any, iIndex: number) => {
+                  const profileStr = String(item.profile || '');
+                  const isSheet = !!item.isSheetMetal ||
+                    profileStr.toLowerCase().includes('ფურცელი') ||
+                    profileStr.toLowerCase().includes('ფურცლოვანი') ||
+                    profileStr.toLowerCase().includes('plate') ||
+                    profileStr.toLowerCase().includes('sheet');
+                  return {
+                    id: item.id || `i-saved-${Date.now()}-${cIndex}-${iIndex}`,
+                    position: item.position || `${c.position || cIndex + 1}.${iIndex + 1}`,
+                    profile: item.profile || (isSheet ? 'ფურცელი' : '50 x 50 x 3.2'),
+                    length: Math.max(0, parseFloat(item.length) || 0),
+                    width: item.width !== undefined ? Math.max(0, parseFloat(item.width) || 0) : (isSheet ? 0 : undefined),
+                    qty: Math.max(1, parseInt(item.qty, 10) || 1),
+                    isSheetMetal: isSheet
+                  };
+                })
               : []
           }));
         }
@@ -230,15 +245,23 @@ export default function App() {
         const totalQty = item.qty * c.qty;
         if (totalQty <= 0) return;
 
-        if (item.isSheetMetal) {
-          const key = item.profile; // e.g. "2.0mm Plate"
+        const profileLower = (item.profile || '').toLowerCase();
+        const isSheet = item.isSheetMetal ||
+          profileLower.includes('ფურცელი') ||
+          profileLower.includes('ფურცლოვანი') ||
+          profileLower.includes('plate') ||
+          profileLower.includes('sheet') ||
+          profileLower.includes('თუნუქ');
+
+        if (isSheet) {
+          const key = item.profile; // e.g. "ფურცელი 1.8მმ"
           if (!sheetMetals[key]) sheetMetals[key] = [];
           sheetMetals[key].push({
             id: item.id,
             constructionName: c.name,
             position: item.position,
-            length: item.length,
-            width: item.width || 1000,
+            length: item.length || 0,
+            width: item.width || 0,
             qty: totalQty
           });
         } else {
@@ -401,20 +424,22 @@ export default function App() {
         qty: ass.qty || 1,
         items: ass.items.map((item, iIndex) => {
           // Detect sheet metal from description or parser flag
+          const profileLower = (item.description || '').toLowerCase();
           const isSheet = item.isSheetMetal !== undefined
             ? item.isSheetMetal
-            : (item.description.toLowerCase().includes('plate') ||
-               item.description.toLowerCase().includes('sheet') ||
-               item.description.toLowerCase().includes('ფურცელი'));
+            : (profileLower.includes('plate') ||
+               profileLower.includes('sheet') ||
+               profileLower.includes('თუნუქ') ||
+               profileLower.includes('ფურცელი'));
           
           return {
             id: `${parentId}-i-${iIndex}`,
             position: item.position || `${ass.position || aIndex + 1}.${iIndex + 1}`,
             profile: item.description,
-            length: item.length || 1000,
+            length: item.length !== undefined ? item.length : (isSheet ? 0 : 1000),
             qty: item.qty || 1,
             isSheetMetal: isSheet,
-            width: item.width !== undefined ? item.width : (isSheet ? 1000 : undefined)
+            width: item.width !== undefined ? item.width : (isSheet ? 0 : undefined)
           };
         })
       };
@@ -605,18 +630,24 @@ export default function App() {
 
   // Total Sheet Metal calculation
   const totalSheetMetalArea = useMemo(() => {
-    const areas: Record<string, { totalArea: number; wasteArea: number; itemsCount: number }> = {};
+    const areas: Record<string, { totalArea: number; wasteArea: number; itemsCount: number; piecesWithoutDimensions: number }> = {};
     Object.keys(compiledData.sheetMetals).forEach((key) => {
       let areaSum = 0;
+      let piecesWithoutDimensions = 0;
       compiledData.sheetMetals[key].forEach((item) => {
-        // Area in m^2: (length * width * qty) / 1,000,000
-        areaSum += (item.length * item.width * item.qty) / 1000000;
+        if (item.length > 0 && item.width > 0) {
+          // Area in m^2: (length * width * qty) / 1,000,000
+          areaSum += (item.length * item.width * item.qty) / 1000000;
+        } else {
+          piecesWithoutDimensions += item.qty;
+        }
       });
 
       areas[key] = {
         totalArea: areaSum,
         wasteArea: areaSum * sheetMetalWasteFactor,
-        itemsCount: compiledData.sheetMetals[key].length
+        itemsCount: compiledData.sheetMetals[key].length,
+        piecesWithoutDimensions
       };
     });
     return areas;
@@ -636,7 +667,11 @@ export default function App() {
       });
 
       Object.entries(totalSheetMetalArea).forEach(([plate, stats]) => {
-        summaryData.push([plate, stats.wasteArea.toFixed(3), 'კვ.მ (მ²)', `${(sheetMetalWasteFactor * 100).toFixed(0)}% კოეფიციენტით`]);
+        if (stats.totalArea > 0) {
+          summaryData.push([plate, stats.wasteArea.toFixed(3), 'კვ.მ (მ²)', `${(sheetMetalWasteFactor * 100).toFixed(0)}% კოეფიციენტით`]);
+        } else {
+          summaryData.push([plate, stats.piecesWithoutDimensions, 'ცალი', 'დეტალების ზომები არ იყო მითითებული BOM-ში']);
+        }
       });
 
       const wsSummary = XLSX.utils.aoa_to_sheet(summaryData);
@@ -683,13 +718,18 @@ export default function App() {
         Object.keys(compiledData.sheetMetals).forEach((plate) => {
           const items = compiledData.sheetMetals[plate] || [];
           items.forEach((item) => {
-            const area = (item.length * item.width * item.qty) / 1000000;
-            sheetData.push([plate, item.length, item.width, item.qty, item.constructionName, area]);
+            const hasDim = item.length > 0 && item.width > 0;
+            const area = hasDim ? (item.length * item.width * item.qty) / 1000000 : '-';
+            sheetData.push([plate, item.length || '-', item.width || '-', item.qty, item.constructionName, area]);
           });
           
           const stats = totalSheetMetalArea[plate];
-          sheetData.push([`ჯამი (${plate})`, '-', '-', '-', 'სუფთა ფართობი', stats.totalArea]);
-          sheetData.push([`ჯამი კოეფიციენტით (${plate})`, '-', '-', '-', `ბრუტო (+${((sheetMetalWasteFactor-1)*100).toFixed(0)}%)`, stats.wasteArea]);
+          if (stats.totalArea > 0) {
+            sheetData.push([`ჯამი (${plate})`, '-', '-', '-', 'სუფთა ფართობი', stats.totalArea]);
+            sheetData.push([`ჯამი კოეფიციენტით (${plate})`, '-', '-', '-', `ბრუტო (+${((sheetMetalWasteFactor-1)*100).toFixed(0)}%)`, stats.wasteArea]);
+          } else {
+            sheetData.push([`ჯამი (${plate})`, '-', '-', stats.piecesWithoutDimensions, 'ცალი (ზომები არ არის მითითებული)', '-']);
+          }
           sheetData.push([]); // empty spacer row
         });
 
@@ -1009,12 +1049,14 @@ export default function App() {
                 <div key={plate} style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '0.4rem' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: '600', marginBottom: '0.15rem' }}>
                     <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '120px' }} title={plate}>{plate}</span>
-                    <span style={{ color: 'var(--secondary)' }}>{stats.wasteArea.toFixed(2)} მ²</span>
+                    <span style={{ color: 'var(--secondary)' }}>
+                      {stats.totalArea > 0 ? `${stats.wasteArea.toFixed(2)} მ²` : `${stats.piecesWithoutDimensions} ცალი`}
+                    </span>
                   </div>
                   <div style={{ paddingLeft: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.1rem', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
                     {items.map((item, idx) => (
                       <div key={idx} style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span>↳ {item.length} &times; {item.width} მმ</span>
+                        <span>↳ {item.length > 0 && item.width > 0 ? `${item.length} × ${item.width} მმ` : 'ზომა მისათითებელია'}</span>
                         <span style={{ fontWeight: '600' }}>&times; {item.qty} ცალი</span>
                       </div>
                     ))}
@@ -1796,14 +1838,14 @@ export default function App() {
                               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
                                 {compiledData.sheetMetals[key].map((item) => (
                                   <span key={item.id} style={{ fontSize: '0.75rem' }}>
-                                    - {item.length}x{item.width} მმ &times; {item.qty} ცალი ({item.constructionName})
+                                    - {item.length > 0 && item.width > 0 ? `${item.length}x${item.width} მმ` : 'ზომა მისათითებელია'} &times; {item.qty} ცალი ({item.constructionName} - პოზ {item.position})
                                   </span>
                                 ))}
                               </div>
                             </td>
-                            <td>{stats.totalArea.toFixed(3)} მ²</td>
+                            <td>{stats.totalArea > 0 ? `${stats.totalArea.toFixed(3)} მ²` : `${stats.piecesWithoutDimensions} ცალი`}</td>
                             <td style={{ color: 'var(--secondary)', fontWeight: 'bold' }}>
-                              {stats.wasteArea.toFixed(3)} მ²
+                              {stats.totalArea > 0 ? `${stats.wasteArea.toFixed(3)} მ²` : 'ზომების შეყვანაა საჭირო'}
                             </td>
                           </tr>
                         );

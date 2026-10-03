@@ -16,11 +16,54 @@ export interface ParsedAssembly {
 }
 
 /**
+ * Helper to identify sheet metal text keywords or thickness specifications
+ */
+export function isSheetMetalIdentifier(desc: string, name?: string, thickness?: string): boolean {
+  const text = `${desc || ''} ${name || ''}`.toLowerCase();
+  if (
+    text.includes('ფურცელი') ||
+    text.includes('ფურცლოვანი') ||
+    text.includes('თუნუქი') ||
+    text.includes('თუნუქის') ||
+    text.includes('plate') ||
+    text.includes('sheet') ||
+    text.includes('лист')
+  ) {
+    return true;
+  }
+  if (thickness && parseFloat(String(thickness).replace(',', '.')) > 0) {
+    return true;
+  }
+  return false;
+}
+
+/**
  * Parses a copied table from Solidworks BOM / Excel.
- * Handles tab-separated text (standard clipboard format for spreadsheet columns).
+ * Supports Tab-separated, Comma-separated (CSV), and Semicolon-separated values.
  */
 export function parseTableText(text: string): ParsedAssembly[] {
-  // Parse the TSV/CSV text respecting quoted fields (which can contain newlines)
+  // Autodetect delimiter: '\t', ',', or ';'
+  let delimiter = '\t';
+  const sampleLines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
+  if (sampleLines.length > 0) {
+    let tabCount = 0;
+    let commaCount = 0;
+    let semicolonCount = 0;
+    for (let i = 0; i < Math.min(sampleLines.length, 10); i++) {
+      tabCount += (sampleLines[i].match(/\t/g) || []).length;
+      commaCount += (sampleLines[i].match(/,/g) || []).length;
+      semicolonCount += (sampleLines[i].match(/;/g) || []).length;
+    }
+    if (tabCount >= commaCount && tabCount >= semicolonCount && tabCount > 0) {
+      delimiter = '\t';
+    } else if (commaCount >= semicolonCount && commaCount > 0) {
+      delimiter = ',';
+    } else if (semicolonCount > 0) {
+      delimiter = ';';
+    }
+  }
+
+  // Parse respecting quoted fields (which can contain newlines)
   const rows: string[][] = [];
   let currentRow: string[] = [];
   let currentField = '';
@@ -46,7 +89,7 @@ export function parseTableText(text: string): ParsedAssembly[] {
     } else {
       if (char === '"') {
         inQuotes = true;
-      } else if (char === '\t') {
+      } else if (char === delimiter) {
         currentRow.push(currentField);
         currentField = '';
       } else if (char === '\n' || char === '\r') {
@@ -112,11 +155,14 @@ export function parseTableText(text: string): ParsedAssembly[] {
         synonyms[key].some((syn) => cell === syn)
       );
       
-      // 2. Fall back to includes search if no exact match is found
+      // 2. Fall back to includes search if no exact match is found, but avoid matching "ჯამური სიგრძე" as "სიგრძე"
       if (idx === -1) {
-        idx = row.findIndex((cell) => 
-          synonyms[key].some((syn) => cell.includes(syn))
-        );
+        idx = row.findIndex((cell) => {
+          if (key === 'length' && (cell.includes('ჯამ') || cell.includes('total'))) {
+            return false;
+          }
+          return synonyms[key].some((syn) => cell.includes(syn));
+        });
       }
       
       if (idx !== -1) {
@@ -168,7 +214,7 @@ export function parseTableText(text: string): ParsedAssembly[] {
     const flatWidth = parseFloat(flatWidthRaw.replace(/\s/g, '').replace(',', '.')) || 0;
 
     // Determine if it's a parent assembly or a child item
-    const isParent = isParentRow(posRaw, descRaw, length, flatLength, flatWidth);
+    const isParent = isParentRow(posRaw, descRaw, length, flatLength, flatWidth, nameRaw, thicknessRaw);
 
     if (isParent) {
       currentAssembly = {
@@ -179,21 +225,26 @@ export function parseTableText(text: string): ParsedAssembly[] {
       };
       assemblies.push(currentAssembly);
     } else {
-      // A sheet metal part is identified by having a non-zero flatWidth
-      const isSheetMetal = flatWidth > 0;
+      // Determine if item is sheet metal
+      const isSheetMetal = isSheetMetalIdentifier(descRaw, nameRaw, thicknessRaw) || flatWidth > 0 || flatLength > 0;
       
-      // Determine description: if sheet and descRaw is empty, use thickness as profile size (e.g. "3mm Plate")
+      // Determine description
       let description = descRaw;
-      if (!description) {
-        if (isSheetMetal) {
-          description = thicknessRaw ? `${thicknessRaw}მმ ფურცელი` : 'ფურცლოვანი ლითონი';
-        } else {
-          description = 'უცნობი პროფილი';
+      if (isSheetMetal) {
+        if (!description || description.trim() === 'ფურცელი' || description.trim() === 'sheet' || description.trim() === 'plate') {
+          if (thicknessRaw) {
+            description = `ფურცელი ${thicknessRaw}მმ`;
+          } else {
+            description = description || 'ფურცლოვანი ლითონი';
+          }
         }
+      } else if (!description) {
+        description = 'უცნობი პროფილი';
       }
 
       // Determine cut length: for sheet metal, it is the flatLength (or regular length if flatLength is empty)
       const cutLength = isSheetMetal ? (flatLength || length) : length;
+      const sheetWidth = isSheetMetal ? (flatWidth || undefined) : undefined;
 
       const item: ParsedItem = {
         position: posRaw,
@@ -201,7 +252,7 @@ export function parseTableText(text: string): ParsedAssembly[] {
         description,
         length: cutLength,
         isSheetMetal,
-        width: isSheetMetal ? flatWidth : undefined,
+        width: sheetWidth,
       };
 
       if (!currentAssembly) {
@@ -218,20 +269,52 @@ export function parseTableText(text: string): ParsedAssembly[] {
     }
   }
 
-  // Cleanup: if any assembly has no items and there are other assemblies with items,
-  // we keep it, but let's filter out empty assemblies if they are redundant.
+  // Cleanup: filter out empty assemblies if they are redundant
   return assemblies.filter((ass) => ass.items.length > 0 || assemblies.length === 1);
 }
 
-function isParentRow(pos: string, desc: string, length: number, flatLength: number, flatWidth: number): boolean {
-  // If position is a flat integer like "1", "2" and all lengths are 0, it's a parent
-  if (pos && /^\d+$/.test(pos.trim()) && length === 0 && flatLength === 0 && flatWidth === 0) {
+function isParentRow(
+  pos: string,
+  desc: string,
+  length: number,
+  flatLength: number,
+  flatWidth: number,
+  name?: string,
+  thickness?: string
+): boolean {
+  const cleanPos = (pos || '').trim();
+  const cleanDesc = (desc || '').trim();
+
+  // 1. A child item has sub-numbering: contains dot, dash or slash between numbers (e.g. "1.1", "1.4", "1-2", "2.14")
+  if (/^\d+[\.\-_/]\d+/.test(cleanPos)) {
+    return false;
+  }
+
+  // 2. If it is identified as Sheet Metal or Plate, it is NEVER a parent assembly
+  if (isSheetMetalIdentifier(cleanDesc, name, thickness)) {
+    return false;
+  }
+
+  // 3. If description contains profile dimensions (e.g. "60 x 60 x 3.2", "20x10", "100*50"), it is NEVER a parent assembly
+  if (/\d+\s*[xX*хХ×]\s*\d+/.test(cleanDesc)) {
+    return false;
+  }
+
+  // 4. If length or flat dimensions exist and > 0, it is a cut piece, NEVER a parent assembly
+  if (length > 0 || flatLength > 0 || flatWidth > 0) {
+    return false;
+  }
+
+  // 5. Standard parent assembly position: integer number (e.g. "1", "2", "3") without lengths
+  if (/^\d+$/.test(cleanPos)) {
     return true;
   }
-  // If it doesn't have a profile description (does not contain 'x' or 'x' and is long text), and no length
-  if (desc && !desc.includes('x') && length === 0 && flatLength === 0 && flatWidth === 0) {
+
+  // 6. Explicit assembly names without cuts (e.g. "კონსტრუქცია 1", "მოაჯირი", "ფერმა", "Assembly", "Frame")
+  if (cleanDesc && !cleanDesc.includes('x') && length === 0 && flatLength === 0 && flatWidth === 0) {
     return true;
   }
+
   return false;
 }
 
