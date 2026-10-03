@@ -15,7 +15,8 @@ import {
   ChevronUp,
   FileSpreadsheet,
   Copy,
-  Check
+  Check,
+  X
 } from 'lucide-react';
 import { solveNesting } from './utils/solver';
 import type { CutItem, SolveResult, SolverSettings, NestedBar } from './utils/solver';
@@ -188,6 +189,10 @@ export default function App() {
 
   // Printing state
   const [isPrinting, setIsPrinting] = useState(false);
+
+  // Modal dialog states
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isSummaryOpen, setIsSummaryOpen] = useState(false);
 
   // Trigger print and reset
   useEffect(() => {
@@ -1010,209 +1015,122 @@ export default function App() {
   }
 
   return (
-    <div className="app-container">
-      {/* Sidebar (Settings & Global API configurations) */}
-      <aside className="sidebar no-print">
-        <div className="brand">
+    <div className="app-shell">
+      {/* Top Application Header */}
+      <header className="top-header no-print">
+        <div className="brand-group" onClick={() => setActiveTab('editor')}>
           <div className="brand-icon">MC</div>
-          <h1 className="brand-name">მასალის ნესტინგი</h1>
-        </div>
-
-        {/* Materials Summary widget */}
-        <div className="glass-panel" style={{ borderColor: 'var(--border-color-glow)' }}>
-          <h3 className="panel-title" style={{ marginBottom: '0.5rem', color: 'var(--primary)' }}>
-            <Layers size={16} /> მასალის ჯამური შეკვეთა
-          </h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', fontSize: '0.8rem' }}>
-            {Object.entries(solveResults).map(([profile, res]) => {
-              const aggregated = getAggregatedCutsForProfile(profile);
-              return (
-                <div key={profile} style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '0.4rem' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: '600', marginBottom: '0.15rem' }}>
-                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '120px' }} title={profile}>{profile}</span>
-                    <span style={{ color: 'var(--primary)' }}>{res.totalBars} ღერო <span style={{ fontWeight: 'normal', color: 'var(--text-muted)', fontSize: '0.75rem' }}>({res.stockLength / 1000}მ)</span></span>
-                  </div>
-                  <div style={{ paddingLeft: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.1rem', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                    {aggregated.map((item, idx) => (
-                      <div key={idx} style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span>↳ {item.length} მმ</span>
-                        <span style={{ fontWeight: '600' }}>&times; {item.qty} ცალი</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
-            {Object.entries(totalSheetMetalArea).map(([plate, stats]) => {
-              const items = compiledData.sheetMetals[plate] || [];
-              return (
-                <div key={plate} style={{ borderBottom: '1px solid var(--border-color)', paddingBottom: '0.4rem' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: '600', marginBottom: '0.15rem' }}>
-                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '120px' }} title={plate}>{plate}</span>
-                    <span style={{ color: 'var(--secondary)' }}>
-                      {stats.totalArea > 0 ? `${stats.wasteArea.toFixed(2)} მ²` : `${stats.piecesWithoutDimensions} ცალი`}
-                    </span>
-                  </div>
-                  <div style={{ paddingLeft: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.1rem', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                    {items.map((item, idx) => (
-                      <div key={idx} style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span>↳ {item.length > 0 && item.width > 0 ? `${item.length} × ${item.width} მმ` : 'ზომა მისათითებელია'}</span>
-                        <span style={{ fontWeight: '600' }}>&times; {item.qty} ცალი</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
-            {Object.keys(solveResults).length === 0 && Object.keys(totalSheetMetalArea).length === 0 && (
-              <span style={{ color: 'var(--text-muted)', fontStyle: 'italic', textAlign: 'center', display: 'block', padding: '0.5rem 0' }}>მასალები არ არის დამატებული</span>
-            )}
+          <div className="brand-text">
+            <h1 className="brand-title">მასალის ნესტინგი</h1>
+            <p className="brand-sub">ჭრის ოპტიმიზატორი &middot; SolidWorks & Excel BOM</p>
           </div>
         </div>
 
-        <div className="glass-panel">
-          <h3 className="panel-title" style={{ marginBottom: '1rem' }}>
-            <Settings size={18} /> გლობალური პარამეტრები
-          </h3>
-          <div className="settings-group">
-            <div className="input-field">
-              <label className="input-label">საწესდებო სიგრძე (მმ)</label>
-              <input
-                type="number"
-                className="form-control"
-                value={settings.stockLength}
-                onChange={(e) =>
-                  setSettings({ ...settings, stockLength: Math.max(1, parseInt(e.target.value, 10) || 0) })
-                }
-              />
-            </div>
-            <div className="input-field">
-              <label className="input-label">ხერხის სისქე (მმ)</label>
-              <input
-                type="number"
-                className="form-control"
-                value={settings.kerf}
-                onChange={(e) =>
-                  setSettings({ ...settings, kerf: Math.max(0, parseFloat(e.target.value) || 0) })
-                }
-              />
-            </div>
-            <div className="input-field">
-              <label className="input-label">კიდის ჩამონაჭერი (მმ)</label>
-              <input
-                type="number"
-                className="form-control"
-                value={settings.trim}
-                onChange={(e) =>
-                  setSettings({ ...settings, trim: Math.max(0, parseInt(e.target.value, 10) || 0) })
-                }
-                placeholder="ორმხრივი ჩამონაჭერი"
-              />
-            </div>
-          </div>
-        </div>
-
-        <div className="glass-panel">
-          <h3 className="panel-title" style={{ marginBottom: '1rem' }}>
-            <ImageIcon size={18} /> Gemini API გასაღები
-          </h3>
-          <div className="settings-group">
-            <p className="input-label" style={{ textTransform: 'none', color: 'var(--text-secondary)' }}>
-              საჭიროა სკრინშოტის გასაანალიზებლად. ინახება თქვენს ბრაუზერში.
-            </p>
-            <input
-              type="password"
-              className="form-control"
-              placeholder="AIzaSy..."
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-            />
-            <a
-              href="https://aistudio.google.com/"
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{ color: 'var(--primary)', fontSize: '0.75rem', textDecoration: 'none' }}
-            >
-              მიიღეთ უფასო API გასაღები Google AI Studio-დან &rarr;
-            </a>
-          </div>
-        </div>
-
-        <div className="glass-panel">
-          <h3 className="panel-title" style={{ marginBottom: '1rem' }}>
-            <Layers size={18} /> ფურცლოვანი ლითონის კოეფიციენტი
-          </h3>
-          <div className="settings-group">
-            <div className="input-field">
-              <label className="input-label">გადანაჭრის კოეფიციენტი</label>
-              <input
-                type="number"
-                step="0.05"
-                className="form-control"
-                value={sheetMetalWasteFactor}
-                onChange={(e) => setSheetMetalWasteFactor(Math.max(1, parseFloat(e.target.value) || 1))}
-              />
-              <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                ამრავლებს ფართობს. მაგ. 1.15 ნიშნავს +15% დანაკარგს.
-              </span>
-            </div>
-          </div>
-        </div>
-
-        <div style={{ marginTop: 'auto', display: 'flex', gap: '0.5rem' }}>
-          <button
-            className="btn btn-secondary"
-            style={{ flex: 1 }}
-            onClick={() => {
-              if (confirm('გსურთ მონაცემების გასუფთავება და თავიდან დაწყება?')) {
-                setConstructions([]);
-                setActiveTab('editor');
-              }
-            }}
-          >
-            გასუფთავება
-          </button>
-          <button
-            className="btn btn-primary"
-            style={{ flex: 1 }}
-            onClick={() => setIsPrinting(true)}
-          >
-            <Printer size={16} /> ბეჭდვა
-          </button>
-        </div>
-      </aside>
-
-      {/* Main Content Dashboard */}
-      <main className="main-content">
-        {/* Navigation Tabs */}
-        <div className="tabs-container no-print">
+        {/* Floating Pill Navigation Tabs */}
+        <nav className="tabs-container">
           <button
             className={`tab-btn ${activeTab === 'editor' ? 'active' : ''}`}
             onClick={() => setActiveTab('editor')}
           >
-            <Layers size={16} /> კონსტრუქციების რედაქტირება ({constructions.length})
+            <Layers size={15} /> კონსტრუქციები ({constructions.length})
           </button>
           <button
             className={`tab-btn ${activeTab === 'paste' ? 'active' : ''}`}
             onClick={() => setActiveTab('paste')}
           >
-            <FileSpreadsheet size={16} /> ცხრილის ჩასმა ან ატვირთვა
+            <FileSpreadsheet size={15} /> ცხრილის ჩასმა / ატვირთვა
           </button>
           <button
             className={`tab-btn ${activeTab === 'ai' ? 'active' : ''}`}
             onClick={() => setActiveTab('ai')}
           >
-            <ImageIcon size={16} /> AI სკრინშოტის ატვირთვა
+            <ImageIcon size={15} /> AI სკრინშოტი
           </button>
           <button
-            className={`tab-btn ${activeTab === 'results' ? 'active' : ''}`}
+            className={`tab-btn tab-btn-highlight ${activeTab === 'results' ? 'active' : ''}`}
             onClick={() => setActiveTab('results')}
-            style={{ marginLeft: 'auto', background: 'var(--primary-glow)', color: 'white' }}
           >
-            <Play size={16} /> გაანგარიშება და ვიზუალიზაცია
+            <Play size={15} /> გაანგარიშება &rarr;
+          </button>
+        </nav>
+
+        {/* Header Action Buttons */}
+        <div className="header-actions">
+          <button
+            className="btn btn-secondary btn-icon"
+            onClick={() => setIsSummaryOpen(true)}
+            title="მასალის შეკვეთის შეჯამება"
+          >
+            <Layers size={16} />
+            <span className="btn-text">შეკვეთის შეჯამება</span>
+          </button>
+          <button
+            className="btn btn-secondary btn-icon"
+            onClick={() => setIsSettingsOpen(true)}
+            title="გლობალური პარამეტრები"
+          >
+            <Settings size={16} />
+            <span className="btn-text">პარამეტრები</span>
+          </button>
+          <button
+            className="btn btn-primary btn-icon"
+            onClick={() => setIsPrinting(true)}
+            title="ბეჭდვა"
+          >
+            <Printer size={16} />
+            <span className="btn-text">ბეჭდვა</span>
           </button>
         </div>
+      </header>
 
+      {/* Top Quick Stats Banner */}
+      <div className="stats-banner no-print">
+        <div className="stat-card">
+          <span className="stat-label">საჭირო 6მ ღერო</span>
+          <div className="stat-value-row">
+            <span className="stat-val highlight">{totalsSummary.totalBars}</span>
+            <span className="stat-unit">ცალი</span>
+          </div>
+          <span className="stat-tag success">&darr; ოპტიმიზებული ჭრა</span>
+        </div>
+
+        <div className="stat-card">
+          <span className="stat-label">ჯამური გადანაჭრები</span>
+          <div className="stat-value-row">
+            <span className="stat-val">{totalsSummary.totalCuts}</span>
+            <span className="stat-unit">დეტალი</span>
+          </div>
+          <span className="stat-sub">{compiledData.profilesList.length} სხვადასხვა პროფილი</span>
+        </div>
+
+        <div className="stat-card">
+          <span className="stat-label">სასარგებლო გამოყენება</span>
+          <div className="stat-value-row">
+            <span className="stat-val emerald">{totalsSummary.averageYield.toFixed(1)}%</span>
+          </div>
+          <div className="stat-progress-bar">
+            <div className="stat-progress-fill" style={{ width: `${totalsSummary.averageYield}%` }} />
+          </div>
+        </div>
+
+        <div className="stat-card">
+          <span className="stat-label">ფურცლოვანი ლითონი</span>
+          <div className="stat-value-row">
+            <span className="stat-val">
+              {Object.values(totalSheetMetalArea).reduce((sum, s) => sum + s.piecesWithoutDimensions + (s.totalArea > 0 ? s.itemsCount : 0), 0)}
+            </span>
+            <span className="stat-unit">ცალი</span>
+          </div>
+          <span className="stat-sub">
+            {Object.keys(compiledData.sheetMetals).length > 0
+              ? `${Object.keys(compiledData.sheetMetals).join(', ')} (იზოლირებული)`
+              : 'არ არის დამატებული'}
+          </span>
+        </div>
+      </div>
+
+      {/* Main Workspace */}
+      <main className="main-content">
         {/* Tab content 1: Visual Cut Lists / Editor */}
         <div className={`editor-tab tab-content-panel ${activeTab === 'editor' ? 'active' : ''}`}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
@@ -1858,6 +1776,185 @@ export default function App() {
 
         </div>
       </main>
+
+      {/* Settings Modal */}
+      {isSettingsOpen && (
+        <div className="modal-backdrop no-print" onClick={() => setIsSettingsOpen(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="modal-title">
+                <Settings size={18} /> გლობალური პარამეტრები
+              </h3>
+              <button className="btn-close" onClick={() => setIsSettingsOpen(false)}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="settings-group">
+              <div className="input-field">
+                <label className="input-label">საწესდებო სიგრძე (მმ)</label>
+                <input
+                  type="number"
+                  className="form-control"
+                  value={settings.stockLength}
+                  onChange={(e) =>
+                    setSettings({ ...settings, stockLength: Math.max(1, parseInt(e.target.value, 10) || 0) })
+                  }
+                />
+              </div>
+              <div className="input-field">
+                <label className="input-label">ხერხის სისქე (მმ)</label>
+                <input
+                  type="number"
+                  className="form-control"
+                  value={settings.kerf}
+                  onChange={(e) =>
+                    setSettings({ ...settings, kerf: Math.max(0, parseFloat(e.target.value) || 0) })
+                  }
+                />
+              </div>
+              <div className="input-field">
+                <label className="input-label">კიდის ჩამონაჭერი (მმ)</label>
+                <input
+                  type="number"
+                  className="form-control"
+                  value={settings.trim}
+                  onChange={(e) =>
+                    setSettings({ ...settings, trim: Math.max(0, parseInt(e.target.value, 10) || 0) })
+                  }
+                  placeholder="ორმხრივი ჩამონაჭერი"
+                />
+              </div>
+              <div className="input-field">
+                <label className="input-label">ფურცლოვანი ლითონის გადანაჭრის კოეფიციენტი</label>
+                <input
+                  type="number"
+                  step="0.05"
+                  className="form-control"
+                  value={sheetMetalWasteFactor}
+                  onChange={(e) => setSheetMetalWasteFactor(Math.max(1, parseFloat(e.target.value) || 1))}
+                />
+                <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                  ამრავლებს ფართობს. მაგ. 1.15 ნიშნავს +15% დანაკარგს.
+                </span>
+              </div>
+              <div className="input-field" style={{ marginTop: '0.5rem', borderTop: '1px solid var(--border-color)', paddingTop: '0.75rem' }}>
+                <label className="input-label">Gemini API გასაღები (სკრინშოტის AI ანალიზისთვის)</label>
+                <input
+                  type="password"
+                  className="form-control"
+                  placeholder="AIzaSy..."
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                />
+                <a
+                  href="https://aistudio.google.com/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ color: 'var(--primary)', fontSize: '0.75rem', textDecoration: 'none', marginTop: '0.2rem' }}
+                >
+                  მიიღეთ უფასო API გასაღები Google AI Studio-დან &rarr;
+                </a>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1rem', borderTop: '1px solid var(--border-color)', paddingTop: '1rem' }}>
+              <button
+                className="btn btn-danger btn-sm"
+                onClick={() => {
+                  if (confirm('გსურთ ყველა კონსტრუქციის გასუფთავება და თავიდან დაწყება?')) {
+                    setConstructions([]);
+                    setActiveTab('editor');
+                    setIsSettingsOpen(false);
+                  }
+                }}
+              >
+                მონაცემების გასუფთავება
+              </button>
+              <button className="btn btn-primary" onClick={() => setIsSettingsOpen(false)}>
+                შენახვა და დახურვა
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Materials Summary Modal */}
+      {isSummaryOpen && (
+        <div className="modal-backdrop no-print" onClick={() => setIsSummaryOpen(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 className="modal-title">
+                <Layers size={18} style={{ color: 'var(--primary)' }} /> მასალის ჯამური შეკვეთა
+              </h3>
+              <button className="btn-close" onClick={() => setIsSummaryOpen(false)}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', maxHeight: '60vh', overflowY: 'auto' }}>
+              {Object.entries(solveResults).map(([profile, res]) => {
+                const aggregated = getAggregatedCutsForProfile(profile);
+                return (
+                  <div key={profile} style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)', borderRadius: '10px', padding: '0.75rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: '600', marginBottom: '0.4rem' }}>
+                      <span style={{ color: '#F3F4F6' }}>{profile}</span>
+                      <span style={{ color: 'var(--primary)' }}>
+                        {res.totalBars} ღერო <span style={{ fontWeight: 'normal', color: 'var(--text-muted)', fontSize: '0.75rem' }}>({res.stockLength / 1000}მ)</span>
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', fontSize: '0.775rem', color: 'var(--text-secondary)' }}>
+                      {aggregated.map((item, idx) => (
+                        <div key={idx} style={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <span>↳ {item.length} მმ</span>
+                          <span style={{ fontWeight: '600' }}>&times; {item.qty} ცალი</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+
+              {Object.entries(totalSheetMetalArea).map(([plate, stats]) => {
+                const items = compiledData.sheetMetals[plate] || [];
+                return (
+                  <div key={plate} style={{ background: 'var(--bg-input)', border: '1px solid var(--border-color)', borderRadius: '10px', padding: '0.75rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: '600', marginBottom: '0.4rem' }}>
+                      <span style={{ color: '#F3F4F6' }}>{plate}</span>
+                      <span style={{ color: 'var(--secondary)' }}>
+                        {stats.totalArea > 0 ? `${stats.wasteArea.toFixed(2)} მ²` : `${stats.piecesWithoutDimensions} ცალი`}
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', fontSize: '0.775rem', color: 'var(--text-secondary)' }}>
+                      {items.map((item, idx) => (
+                        <div key={idx} style={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <span>↳ {item.length > 0 && item.width > 0 ? `${item.length} × ${item.width} მმ` : 'ზომა მისათითებელია'}</span>
+                          <span style={{ fontWeight: '600' }}>&times; {item.qty} ცალი</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+
+              {Object.keys(solveResults).length === 0 && Object.keys(totalSheetMetalArea).length === 0 && (
+                <span style={{ color: 'var(--text-muted)', fontStyle: 'italic', textAlign: 'center', display: 'block', padding: '1rem 0' }}>
+                  მასალები ჯერ არ არის დამატებული.
+                </span>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.5rem', marginTop: '0.5rem', borderTop: '1px solid var(--border-color)', paddingTop: '1rem' }}>
+              <button className="btn btn-secondary" onClick={exportToExcel}>
+                <FileSpreadsheet size={15} style={{ color: 'var(--secondary)' }} /> Excel ექსპორტი
+              </button>
+              <button className="btn btn-primary" onClick={() => setIsSummaryOpen(false)}>
+                დახურვა
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
