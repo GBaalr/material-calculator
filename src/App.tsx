@@ -1133,17 +1133,81 @@ export default function App() {
       <main className="main-content">
         {/* Tab content 1: Visual Cut Lists / Editor */}
         <div className={`editor-tab tab-content-panel ${activeTab === 'editor' ? 'active' : ''}`}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
               <div>
-                <h2>კონსტრუქციებისა და გადანაჭრების რედაქტორი</h2>
-                <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
+                <h2 style={{ fontSize: '1rem', fontWeight: '700', margin: 0 }}>კონსტრუქციებისა და გადანაჭრების რედაქტორი</h2>
+                <p style={{ color: 'var(--text-secondary)', fontSize: '0.75rem' }}>
                   განსაზღვრეთ კონსტრუქციები და პროფილების ზომები. ძირითადი რაოდენობა ამრავლებს შიდა გადანაჭრებს.
                 </p>
               </div>
-              <button className="btn btn-primary" onClick={addConstruction}>
-                <Plus size={16} /> კონსტრუქციის დამატება
+              <button className="btn btn-primary btn-sm" onClick={addConstruction}>
+                <Plus size={14} /> კონსტრუქციის დამატება
               </button>
             </div>
+
+            {/* Quick Materials Order Overview on Editor tab */}
+            {constructions.length > 0 && Object.keys(solveResults).length > 0 && (
+              <div className="glass-panel" style={{ padding: '0.6rem 0.85rem', marginBottom: '0.75rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                    <Layers size={14} style={{ color: 'var(--primary)' }} />
+                    <span style={{ fontSize: '0.775rem', fontWeight: '700', color: '#F3F4F6' }}>
+                      საჭირო მასალების შეჯამება (შესყიდვის უწყისი)
+                    </span>
+                  </div>
+                  <button 
+                    className="btn btn-secondary btn-sm" 
+                    onClick={() => setActiveTab('results')}
+                    style={{ padding: '0.15rem 0.5rem', fontSize: '0.675rem' }}
+                  >
+                    ჭრის რუკა და დიაგრამები &rarr;
+                  </button>
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+                  {Object.entries(solveResults).map(([profile, res]) => (
+                    <div 
+                      key={profile} 
+                      style={{ 
+                        background: 'var(--bg-input)', 
+                        border: '1px solid var(--border-color)', 
+                        borderRadius: '6px', 
+                        padding: '0.25rem 0.55rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.4rem',
+                        fontSize: '0.725rem'
+                      }}
+                    >
+                      <span style={{ display: 'inline-block', width: '7px', height: '7px', borderRadius: '50%', backgroundColor: getProfileColor(profile, 0) }} />
+                      <span style={{ fontWeight: '600', color: '#F3F4F6' }}>{profile}:</span>
+                      <span style={{ fontWeight: '700', color: 'var(--primary)' }}>{res.totalBars} ღერო</span>
+                      <span style={{ color: 'var(--text-muted)', fontSize: '0.675rem' }}>({(res.totalBars * (settings.stockLength / 1000)).toFixed(0)}მ)</span>
+                    </div>
+                  ))}
+                  {Object.entries(totalSheetMetalArea).map(([plate, stats]) => (
+                    <div 
+                      key={plate} 
+                      style={{ 
+                        background: 'var(--bg-input)', 
+                        border: '1px solid var(--border-color)', 
+                        borderRadius: '6px', 
+                        padding: '0.25rem 0.55rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.4rem',
+                        fontSize: '0.725rem'
+                      }}
+                    >
+                      <span>📄</span>
+                      <span style={{ fontWeight: '600', color: '#F3F4F6' }}>{plate}:</span>
+                      <span style={{ fontWeight: '700', color: 'var(--secondary)' }}>
+                        {stats.totalArea > 0 ? `${stats.wasteArea.toFixed(2)} მ²` : `${stats.piecesWithoutDimensions} ცალი`}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {constructions.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '4rem 2rem', color: 'var(--text-secondary)' }} className="glass-panel">
@@ -1545,48 +1609,86 @@ export default function App() {
         {/* Tab content 4: Solve & Visualise Results */}
         <div className={`results-tab tab-content-panel ${activeTab === 'results' ? 'active' : ''}`}>
             
-            {/* Statistics Row */}
+            {/* Compact Materials Requirements Table - რა მასალა რამდენი მჭირდება */}
             <div className="glass-panel">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.75rem' }}>
-                <h2 style={{ margin: 0 }}>შეკვეთის გლობალური სტატისტიკა</h2>
-                <div style={{ display: 'flex', gap: '0.5rem' }} className="no-print">
-                  <button className="btn btn-secondary" onClick={exportToExcel}>
-                    <FileSpreadsheet size={16} style={{ color: 'var(--secondary)' }} /> Excel ექსპორტი
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.6rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                  <Layers size={16} style={{ color: 'var(--primary)' }} />
+                  <h3 style={{ margin: 0, fontSize: '0.9rem', fontWeight: '700' }}>
+                    მასალების შესყიდვის უწყისი (რა მასალა რამდენი მჭირდება)
+                  </h3>
+                </div>
+                <div style={{ display: 'flex', gap: '0.35rem' }} className="no-print">
+                  <button className="btn btn-secondary btn-sm" onClick={exportToExcel} style={{ padding: '0.2rem 0.55rem', fontSize: '0.725rem' }}>
+                    <FileSpreadsheet size={13} style={{ color: 'var(--secondary)' }} /> Excel ექსპორტი
                   </button>
-                  <button className="btn btn-primary" onClick={() => setIsPrinting(true)}>
-                    <Printer size={16} /> ბეჭდვა
+                  <button className="btn btn-primary btn-sm" onClick={() => setIsPrinting(true)} style={{ padding: '0.2rem 0.55rem', fontSize: '0.725rem' }}>
+                    <Printer size={13} /> ბეჭდვა
                   </button>
                 </div>
               </div>
-              <div className="stats-grid">
-                <div className="stat-card">
-                  <div className="stat-label">საჭირო მასალის რაოდენობა (ღერო)</div>
-                  <div className="stat-value" style={{ color: 'var(--primary)' }}>
-                    {totalsSummary.totalBars} <span style={{ fontSize: '0.9rem', fontWeight: '500', color: 'var(--text-secondary)' }}>({settings.stockLength / 1000}მ თითო)</span>
-                  </div>
-                </div>
-                <div className="stat-card">
-                  <div className="stat-label">ჯამური გადანაჭრები</div>
-                  <div className="stat-value">{totalsSummary.totalCuts}</div>
-                </div>
-                <div className="stat-card">
-                  <div className="stat-label">ჯამური ნარჩენი / გადანაჭრები</div>
-                  <div className="stat-value" style={{ color: 'var(--warning)' }}>
-                    {(totalsSummary.totalScrapLength / 1000).toFixed(2)} მ
-                  </div>
-                </div>
-                <div className="stat-card">
-                  <div className="stat-label">მასალის სასარგებლო გამოყენება</div>
-                  <div className="stat-value" style={{ color: 'var(--secondary)' }}>
-                    {totalsSummary.averageYield.toFixed(1)}%
-                  </div>
-                </div>
+
+              <div className="table-container">
+                <table className="custom-table">
+                  <thead>
+                    <tr>
+                      <th style={{ width: '26%' }}>პროფილი / მასალა</th>
+                      <th style={{ width: '22%' }}>შესასყიდი რაოდენობა</th>
+                      <th style={{ width: '18%' }}>ჯამური სიგრძე</th>
+                      <th style={{ width: '18%' }}>გადანაჭრები</th>
+                      <th style={{ width: '16%' }}>გამოსავლიანობა</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Object.entries(solveResults).map(([profile, res]) => (
+                      <tr key={profile}>
+                        <td style={{ fontWeight: '600', color: '#F3F4F6' }}>
+                          <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', backgroundColor: getProfileColor(profile, 0), marginRight: '6px' }} />
+                          {profile}
+                        </td>
+                        <td style={{ fontWeight: '700', color: 'var(--primary)' }}>
+                          {res.totalBars} ღერო ({settings.stockLength / 1000}მ)
+                        </td>
+                        <td>{(res.totalBars * (settings.stockLength / 1000)).toFixed(1)} მ</td>
+                        <td>{res.bars.reduce((sum, b) => sum + b.cuts.length, 0)} ცალი დეტალი</td>
+                        <td>
+                          <span style={{ color: res.yieldPercent > 80 ? 'var(--secondary)' : 'var(--warning)', fontWeight: '600' }}>
+                            {res.yieldPercent.toFixed(1)}%
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                    {Object.entries(totalSheetMetalArea).map(([plate, stats]) => (
+                      <tr key={plate}>
+                        <td style={{ fontWeight: '600', color: '#F3F4F6' }}>
+                          <span style={{ marginRight: '6px' }}>📄</span>
+                          {plate}
+                        </td>
+                        <td style={{ fontWeight: '700', color: 'var(--secondary)' }}>
+                          {stats.totalArea > 0 ? `${stats.wasteArea.toFixed(2)} მ²` : `${stats.piecesWithoutDimensions} ცალი`}
+                        </td>
+                        <td>{stats.totalArea > 0 ? `${stats.totalArea.toFixed(2)} მ² (სუფთა)` : 'ზომები BOM-ში არ იყო'}</td>
+                        <td>{stats.itemsCount} ცალი დეტალი</td>
+                        <td style={{ color: 'var(--text-muted)' }}>ფურცლოვანი</td>
+                      </tr>
+                    ))}
+                    {Object.keys(solveResults).length === 0 && Object.keys(totalSheetMetalArea).length === 0 && (
+                      <tr>
+                        <td colSpan={5} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '1rem' }}>
+                          მასალები ჯერ არ არის დამატებული.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
               </div>
             </div>
 
             {/* Profile Nesting Layouts */}
             <div className="glass-panel">
-              <h2 style={{ marginBottom: '1.5rem' }}>პროფილების ნესტინგის დიაგრამები (1D)</h2>
+              <h3 style={{ margin: '0 0 0.75rem 0', fontSize: '0.9rem', fontWeight: '700' }}>
+                პროფილების ნესტინგის დიაგრამები (1D)
+              </h3>
               
               {compiledData.profilesList.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-secondary)' }}>
